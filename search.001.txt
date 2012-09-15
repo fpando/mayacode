@@ -1,0 +1,223 @@
+file -f -new;
+
+int $i = 0; 
+int $loop = 3; 
+int $DensityTest = 0;  
+float $particleRadius = 3;
+float $fieldLimit = 20;
+int $distLimit = 30;
+float $denseLimit = .9;
+int $numParticles = 0;
+int $numDensityNodes = 0;
+int $numMoved = 0;
+int $chance = 2;
+string $version = "v003";
+string $savepath = "C:/Documents and Settings/lamp/My Documents/2006.Fall/Search/assignment.002/";
+
+setMaterials();
+while ($DensityTest == 0) { 	
+	$numParticles = createParticleField($fieldLimit,$numParticles,$particleRadius);
+	$DensityTest = checkThreshold($fieldLimit,$denseLimit);
+}
+$numDensityNodes = createDensityNodes(0,$numParticles,$particleRadius,$fieldLimit,$i,$loop);
+$i++;
+if ($numDensityNodes) { 
+	while ($i < $loop) {		
+		$numMoved = fieldIntervention($distLimit,$numParticles,$fieldLimit,$i,$loop);
+		$numParticles = growField($numDensityNodes,$numMoved,$particleRadius,$fieldLimit,$numParticles);
+		$numDensityNodes = createDensityNodes($numDensityNodes,$numParticles,$particleRadius,$fieldLimit,$i,$loop);
+		saveMayaFile($version,$i,$savepath);
+		$i++;
+	}
+}
+else { print ("\n\n\n\n\n\t\t\t\t***** Program Terminated ******\n No successful densities found on first run.\n Nothing to go on....\n" + $numParticles + " particles created, now destroyed.\n\n\n\n\n\n"); }
+
+
+global proc mesh() {
+	int $i = 0;
+	string $meshcmd = "polyCreateFacet ";
+	string $locators[] = eval("ls -typ transform \":gravity*\"");
+	float $locatorPos[];
+	if (size($locators) > 2) {
+		while ($i < size($locators)) {
+			$locatorPos = eval("pointPosition " + $locators[$i]);
+			$meshcmd = $meshcmd + " -p " + $locatorPos[0] + " " + $locatorPos[1] + " " + $locatorPos[2];
+			$i++;
+		}
+	}
+	eval($meshcmd);
+}
+
+
+global proc saveMayaFile(string $version, int $filenum, string $savepath) {
+	eval("file -rename \"" + $savepath + $version + "/iteration." + $filenum + ".mb\""); 
+	eval("file -save -type \"mayaBinary\"");
+}
+
+global proc setMaterials() {
+	int $i = 0;
+	shadingNode -asShader lambert;
+	sets -renderable true -noSurfaceShader true -empty -name lambert1SG;
+	connectAttr -f lambert1.outColor lambert1SG.surfaceShader;
+	setAttr "lambert1.color" -type double3 0.0470988 0.024 1;
+	shadingNode -asShader lambert;
+	sets -renderable true -noSurfaceShader true -empty -name lambert2SG;
+	connectAttr -f lambert2.outColor lambert2SG.surfaceShader;
+	setAttr "lambert2.color" -type double3 0.8 0.3 0;
+	shadingNode -asShader lambert;
+	sets -renderable true -noSurfaceShader true -empty -name lambert3SG;
+	connectAttr -f lambert3.outColor lambert3SG.surfaceShader;
+	setAttr "lambert3.color" -type double3 0 0 0;
+	polyCube -name base;
+	setAttr "base.scaleX" 20;
+	setAttr "base.scaleY" 20;
+	setAttr "base.translateZ" -10;
+	sets -e -forceElement lambert3SG;
+}
+
+
+global proc int growField(int $numDensityNodes, int $numMoved, float $particleRadius, float $fieldLimit, int $numParticles) {
+	int $i = 0;
+	int $success = 0;
+	$numNew = $numDensityNodes + $numMoved;
+	while ($i < $numNew) {
+		print("NumNew: " + $numNew + "\tCreate: " + $i + "\n");
+		$numParticles = createParticleField($fieldLimit,$numParticles,$particleRadius);
+      		$i++;
+  	} 
+	return $numParticles;
+}
+
+global proc int fieldIntervention(int $chance, int $distLimit, int $numParticles, float $fieldLimit, int $mainLoopCount){
+  	int $i = 0;
+	int $j = 0;
+	float $intervene[];
+	int $numMoved = 0;
+	float $distance = 0;
+	float $densityPos[];
+	float $particlePos[];
+	string $dense[] = eval("ls -typ transform \":density*\"");
+  	while ($i < size($dense)) {
+      		$chance = rand($chance);
+		if ($chance == 1) {
+         		$densityPos = eval("getAttr density" + $i + ".center");
+			while ($j < $numParticles) {
+				$particlePos = eval("getAttr particle" + $j + ".center"); 
+				$distance = getDistance($particlePos,$densityPos);
+         			print ("\t\t\tdensity: " + $i + " particle: " + $j + " distlimit: " + $distLimit + " distance: " + $distance + "\n");
+				if ($distance < $distLimit) {
+					$numMoved = moveParticle($fieldLimit,$mainLoopCount,$numMoved,$j);
+         			}
+				$j++;
+      			}
+		}
+		else { print ("\t\t\t\tNo Chance\n\n\n"); }
+      		$i++;
+   	}
+	return $numMoved;
+}
+
+global proc int moveParticle(int $fieldLimit, int $mainLoopCount, int $numMoved, int $j) {
+	float $intervene[];			
+	print ("\t\t\t\tmove particle" + $j + " outside fieldLimit: " + $fieldLimit + "\n");
+	$intervene[0] = ($fieldLimit + $mainLoopCount) - (rand($fieldLimit * 2 + ($mainLoopCount *2)));
+	$intervene[1] = ($fieldLimit + $mainLoopCount) - (rand($fieldLimit * 2 + ($mainLoopCount *2)));
+	$intervene[2] = ($fieldLimit + $mainLoopCount) - (rand($fieldLimit * 2 + ($mainLoopCount *2)));
+        evalEcho("move -r " + $intervene[0] + " " + $intervene[1] + " " + $intervene[2] + " " + " particle" + $j + "\n");
+	$numMoved++;
+	return $numMoved;
+}
+
+
+global proc float getDistance(float $num1[], float $num2[]){
+	float $new[];
+	float $distance;
+	$new[0] = ($num2[0]-$num1[0]);
+	$new[1] = ($num2[1]-$num1[1]);
+	$new[2] = ($num2[2]-$num1[2]);
+	$distance = `mag<<$new[0],$new[1],$new[2]>>`;
+	return $distance;
+}
+	
+global proc int createDensityNodes(int $numDensityNodes, int $numParticles, float $particleRadius, int $fieldLimit, int $mainLoopCount, int $loop) {
+	int $i = 0;
+	int $j = 0;
+	int $subObjX = $numParticles;
+	int $subObjY = $numParticles;
+	float $densityCenter[];
+	float $clonePosX[];
+	float $clonePosY[];
+	float $particleCenter[];
+	float $locatorCenter[];
+	while ($i < $numParticles) {
+		$j = 0;
+		while ($j < $numParticles) {
+			print("\t\t\t\t\t\t\t\t\tParticles: " + $numParticles + " :: " + $mainLoopCount + "!" + $loop +" - " + $i + "!" + $numParticles + " - " + $j + "\n");
+			$clonePosX = eval("getAttr particle" + $i + ".center");
+			$clonePosY = eval("getAttr particle" + $j + ".center");
+			if ($clonePosX[0] != $clonePosY[0] && $clonePosX[1] != $clonePosY[1] && $clonePosX[2] != $clonePosY[2]) {
+				eval("polySphere -n cloneX" + $subObjX + " -r " + $particleRadius);
+				eval("move " + $clonePosX[0] + " " + $clonePosX[1] + " " + $clonePosX[2] + " cloneX" + $subObjX);
+				eval("polySphere -n cloneY" + $subObjY + " -r " + $particleRadius);
+				eval("move " + $clonePosY[0] + " " + $clonePosY[1] + " " + $clonePosY[2] + " cloneY" + $subObjY);
+				eval("polyBoolOp -op 3 -n density" + $numDensityNodes + " cloneX" + $subObjX + " cloneY" + $subObjY);
+				sets -e -forceElement lambert2SG;
+				$densityCenter = eval("getAttr density" + $numDensityNodes + ".center"); 
+				eval("spaceLocator -n gravity" + $numDensityNodes + " -p " + $densityCenter[0] + " " + $densityCenter[1] + " " + $densityCenter[2]);
+				eval("setAttr density" + $numDensityNodes + ".visibility 0");
+				if ($densityCenter[0] == 0 && $densityCenter[1] == 0 && $densityCenter[2] == 0) {
+					eval("delete density" + $numDensityNodes);
+					eval("delete cloneX" + $subObjX);
+					eval("delete cloneY" + $subObjY);
+				}
+				else {
+					moveParticle($fieldLimit,$mainLoopCount,0,$i);
+					moveParticle($fieldLimit,$mainLoopCount,0,$j);
+					$subObjX++;
+					$subObjY++;
+					$numDensityNodes++;
+				}
+			}
+			$j++;
+		}
+		$i++;
+	}
+	$i = 0;
+	$j = 0;
+	while ($i < $numDensityNodes) {
+		while ($j < $numParticles) {
+			$particleCenter = eval("getAttr particle" + $i + ".center");
+			if ($particleCenter[0] == $locatorCenter[0] && $particleCenter[1] == $locatorCenter[1] && $particleCenter[2] == $locatorCenter[2]) {
+				eval("delete locator" + $i);
+			} 
+			$j++;
+		}
+		$i++;
+	}
+	return $numDensityNodes;
+}
+
+global proc int createParticleField(float $fieldLimit, int $numParticles, float $particleRadius) {
+  	float $x = (rand(($fieldLimit * 2)) - $fieldLimit); 
+	float $y = (rand(($fieldLimit * 2)) - $fieldLimit);
+	float $z = (rand(($fieldLimit * 2)) - $fieldLimit);
+  	eval("polySphere -name particle" + $numParticles + " -r " + $particleRadius);
+	eval("move " + $x + " " + $y + " " + $z);// + " particle" + $numParticles);
+	sets -e -forceElement lambert1SG;
+	$numParticles++;
+	return $numParticles; 
+}
+
+global proc int checkThreshold(float $fieldLimit, float $denseLimit) {
+	string $particles[] = `ls -typ mesh`;
+	int $num = size($particles);
+  	float $dense = $fieldLimit / $num;
+  	if ($dense < $denseLimit) { 
+		print("\tTotal Paricles: " + $num + "  FieldLimit: " + $fieldLimit + "  denseLimit: " + $denseLimit + "  Density: " + $dense + "\n");
+		return 1;
+	} 
+	else {
+		return 0;
+	}
+}
+

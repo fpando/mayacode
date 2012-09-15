@@ -1,0 +1,327 @@
+file -f -new;
+
+int $extrudeRandom = 0;
+int $numParticles = 22;
+string $version = "v029";
+float $moveStatic = 0.75;
+int $frames = 25;
+int $xlimit = 20; // camera set for ~20
+int $ylimit = 20; // camera set for ~20
+int $savefile = 0;
+float $deform = 0.25;
+
+camera -name rendercam1 -centerOfInterest 305.04 -focalLength 205.681 -lensSqueezeRatio 1 -cameraScale 7.447 -horizontalFilmAperture 1.4173 -horizontalFilmOffset 0 -verticalFilmAperture 0.9449 -verticalFilmOffset 0 -filmFit Horizontal -overscan 1 -motionBlur 0 -shutterAngle 144 -nearClipPlane 0.01 -farClipPlane 1000000 -orthographic 0 -orthographicWidth 0.1; 
+move -r 10 10 25 rendercam1;
+setAttr rendercam1.backgroundColor -type double3 1 1 1;
+renderFrame(100001,$version);
+makeField($xlimit,$ylimit,$deform,$numParticles);
+while ($savefile < $frames) {
+	print("version " + $version + " : savefile " + $savefile + " : frames " + $frames + "\n");	
+	extrudeFace($numParticles,$extrudeRandom);
+	if ($savefile == 0) { materials($numParticles); }
+	createDensityNodes($numParticles);
+	setColor($numParticles);
+	renderFrame($savefile,$version);
+	densityCheck($numParticles);
+	moveParticle($numParticles,$moveStatic);
+	invisibleMesh($numParticles);
+	$savefile++;
+}
+
+
+global proc densityCheck(int $numParticles) {
+	int $i = 0;
+	int $j = 0;
+	int $k = 0;
+	string $locators[] = eval("ls -typ transform \":locator*\"");
+	float $locator1[];
+	float $locator2[];
+	float $particleCenter[];
+	float $repulsorCenter[];
+	float $repulsorMove[];
+	float $distance = 0;
+	string $renameLocators[];
+	while (($i < size($locators)) && (size($locators) > 0)) {
+		$locator1 = eval("pointPosition " + $locators[$i]);
+		$j = 0;
+		while ($j < size($locators)) {
+			$locator2 = eval("pointPosition " + $locators[$j]);
+			if ($i != $j) {
+				$distance = getDistance($locator1,$locator2);
+				print ("\t\t\t\tDENSITY DISTANCE: " + $distance + "\n");
+				if ($distance < 1 && $distance > 0) {
+					$renameLocators[$k] = $locators[$i]; 
+					$k++;
+					$renameLocators[$k] = $locators[$j];
+					$k++;
+				}
+			}
+			$j++;
+		}				
+		$i++;
+	}
+	$i = 0;
+	$j = 0;
+	$k = 0;
+	$renameLocators = stringArrayRemoveDuplicates($renameLocators);
+	print($renameLocators);
+	while (($i < size($renameLocators)) && (size($renameLocators) > 0)) { 
+		eval("rename " + $renameLocators[$i] + " repulsor" + $i);
+		$repulsorCenter = eval("pointPosition repulsor" + $i);
+ 		while ($j < $numParticles) {
+			$particleCenter = eval("getAttr particle" + $j + ".center");
+			$distance = getDistance($repulsorCenter,$particleCenter);
+			if ($distance < 1 && $distance > 0) {
+				$repulsorMove[0] = 5 - (rand(10));
+				$repulsorMove[1] = 5 - (rand(10));
+				$repulsorMove[2] = 5 - (rand(10));
+				evalEcho("move -r " + $repulsorMove[0] + " " + $repulsorMove[1] + " " + $repulsorMove[2] + " curve" + $j);		
+				evalEcho("polySphere -n sphereRepulse" + $k + " -r 0.5");
+				evalEcho("sets -e -forceElement phong2SG");
+				evalEcho("move " + $repulsorCenter[0] + " " + $repulsorCenter[1] + " " + $repulsorCenter[2] + " sphereRepulse" + $k);
+				$k++;
+			}
+			$j++;
+		}
+		$i++; 
+	}
+}
+
+global proc invisibleMesh(int $numParticles) {
+	int $i = 0;
+	int $j = 0;
+	string $locators[] = eval("ls -typ transform \":locator*\"");
+	while ($i < $numParticles) { eval("delete particle" + $i); $i++; }
+	while ($j < size($locators)) { eval("delete " + $locators[$j]); $j++; }
+}
+
+global proc extrudeFace(int $numParticles, int $extrudeRandom) { 
+	int $i = 0;
+	int $extrudeDist = 0;
+	while ($i < $numParticles) {
+		eval("planarSrf -n particle" + $i + " -ch 1 -d 1 -ko 0 -tol 0.00155 -rn 0 -po 1 curve" + $i);		
+		if ($extrudeRandom == 1) {
+			$extrudeDist = random(10);
+			eval("polyExtrudeFacet -ltz -" + $extrudeDist + " particle" + $i + ".f[0]");
+		}
+		else { eval("polyExtrudeFacet -ltz 1 particle" + $i + ".f[0]"); }
+		$i++;
+	}
+}
+
+global proc float[] getVector(float $num1[], float $num2[]){
+	float $new[];
+	$new[0] = ($num2[0]-$num1[0]);
+	$new[1] = ($num2[1]-$num1[1]);
+	$new[2] = ($num2[2]-$num1[2]);
+	normalize $new;
+	return $new;
+}
+	
+global proc float getDistance(float $num1[], float $num2[]){
+	float $new[];
+	$new[0] = ($num2[0]-$num1[0]);
+	$new[1] = ($num2[1]-$num1[1]);
+	$new[2] = ($num2[2]-$num1[2]);
+	float $distance = `mag<<$new[0],$new[1],$new[2]>>`;
+	return $distance;
+}
+
+global proc moveParticle(int $numParticles, float $moveStatic) {
+	int $i = 0;
+	int $j = 0;
+	string $locators[] = eval("ls -typ transform \":locator*\"");
+	string $repulsors[] = eval("ls -typ transform \":repuls*\"");
+	float $particleMove[];
+	float $vector[];
+	float $particleCenter[];
+	float $locatorCenter[];
+	float $repulsorCenter[];
+	float $intensity = 0;
+	float $distance = 0;
+	float $tmp = 0;
+	float $mag = 0;
+	while ($i < $numParticles) {			
+		$particleCenter = eval("getAttr curve" + $i + ".center");
+		$j = 0;
+		while (($j < size($locators)) && (size($locators) > 0)) {
+			$intensity = eval("getAttr " + $locators[$j] + ".intensity"); 
+			$locatorCenter = eval("pointPosition " + $locators[$j]);
+			$vector = getVector($particleCenter,$locatorCenter);
+			$distance = getDistance($particleCenter,$locatorCenter);
+			if ($distance < 1) { $distance = 1; }
+			$mag = 1 / $distance;
+			$particleMove[0] = $mag * $vector[0] * $intensity / $moveStatic;
+			$particleMove[1] = $mag * $vector[1] * $intensity / $moveStatic;
+			evalEcho("move -r " + $particleMove[0] + " " + $particleMove[1] + " 0 curve" + $i);
+			$j++;
+		}
+		$j = 0;
+		while (($j < size($repulsors)) && (size($repulsors) > 0)) {
+			$intensity = eval("getAttr " + $repulsors[$j] + ".intensity");
+			$repulsorCenter = eval("pointPosition " + $repulsors[$j]);
+			$vector = getVector($particleCenter,$repulsorCenter);
+			$distance = getDistance($particleCenter,$repulsorCenter);
+			if ($distance < 1) { $distance = 1; }
+			$mag = 1 / $distance;
+			$particleMove[0] = -($mag * $vector[0] * $intensity / $moveStatic);
+			$particleMove[1] = -($mag * $vector[1] * $intensity / $moveStatic);
+			evalEcho("move -r " + $particleMove[0] + " " + $particleMove[1] + " 0 curve" + $i);
+			$j++;	
+		}			
+		$i++;
+	}
+	
+}
+
+global proc setColor(int $numParticles) {
+	int $i = 0;
+	int $j = 0;
+	string $locators[] = eval("ls -typ transform \":locator*\"");
+	float $tmp = 0;
+	float $distance = 0;
+	float $particlePos[];
+	float $locatorPos[];
+	float $color = 0;
+	while ($i < $numParticles) {
+		$particlePos = eval("getAttr particle" + $i + ".center");
+		$j = 0;
+		$distance = 10;
+		while (($j < size($locators)) && (size($locators) > 0)) {
+			$locatorPos = eval("pointPosition " + $locators[$j]);
+			$tmp = getDistance($particlePos,$locatorPos);
+			if ($tmp < $distance) { $distance = $tmp; }
+			$j++;
+		}
+		$color = 1 / ($distance * 2);
+		eval("select particle" + $i);		
+		eval("sets -e -forceElement blinn" + $i + "SG");
+		eval("setAttr blinn" + $i + ".color -type double3 1 " + $color + " 0");
+		$i++;
+	}	
+}
+
+global proc createDensityNodes(int $numParticles) {
+	int $i = 0;
+	int $j = 0;
+	float $densityCenter[];
+	float $LocatorCenter[];
+	float $particleCenter1[];
+	float $particleCenter2[];
+	float $bbmin[];
+	float $bbmax[];
+	float $area;
+	string $locators[] = eval("ls -typ transform \":locator*\"");
+	int $numLocators = size($locators);
+	while ($i < $numParticles) {
+		$j = 0;
+		while ($j < $numParticles) {
+			$particleCenter1 = eval("getAttr particle" + $i + ".center");
+			$particleCenter2 = eval("getAttr particle" + $j + ".center");
+			if ($i != $j) {
+				eval("duplicate -n tmp1 -rr particle" + $i);
+				eval("duplicate -n tmp2 -rr particle" + $j);
+				eval("polyBoolOp -op 3 -n density tmp1 tmp2");
+				$densityCenter = eval("getAttr density.center");
+				$bbmin = eval("getAttr density.boundingBoxMin");
+				$bbmax = eval("getAttr density.boundingBoxMax");
+				$area = ($bbmax[0] - $bbmin[0]) * ($bbmax[1] - $bbmin[1]);
+				eval("spaceLocator -n locator" + $numLocators + " -p " + $densityCenter[0] + " " + $densityCenter[1] + " " + $densityCenter[2]);
+				eval("addAttr -ln intensity -at double locator" + $numLocators);
+				eval("setAttr -e -keyable true locator" + $numLocators + ".intensity " + $area);			
+				eval("delete tmp1 tmp2 density");
+				$locatorCenter = eval("pointPosition locator" + $numLocators);
+				if ($locatorCenter[0] == 0 && $locatorCenter[1] == 0 && $locatorCenter[2] == 0) { eval("delete locator" + $numLocators); }
+				else { $numLocators++; }
+			}
+			$j++;
+		}
+		$i++;
+	}
+}
+
+global proc makeField(float $xlimit, float $ylimit, float $deform, int $numParticles) {
+	int $i = 0;
+	int $deformCV;
+	float $deformDist = 0;
+	float $x = 0;
+	float $y = 0;
+	while ($i < $numParticles) {
+		$x = rand($xlimit);
+		$y = rand($ylimit);	
+		eval("curve -n curve" + $i + " -d 1 -p 0 0 0 -p 1 0 0 -p 1 1 0 -p 0 1 0");
+		eval("closeCurve -ps 1 -bb 0 curve" + $i);
+		eval("delete curve" + $i);
+		eval("rename curve" + $i + "closedCurve1 curve" + $i);
+		eval("move -r " + $x + " " + $y + " 0 curve" + $i);
+		$deformDist = rand($deform);
+		$deformCV = rand(4);
+		evalEcho("move -r " + $deformDist + " " + $deformDist + " 0 curve" + $i + ".cv[" + $deformCV + "]");
+	 	$i++;
+	}
+}
+
+global proc renderFrame(int $savefile, string $version) {
+	string $fullpath = "\"C:/Documents and Settings/lamp/My Documents/2006.fall/Search/frames/" + $version + "/" + $savefile + ".jpg\"";
+	lookThru rendercam1;
+	mayaSoftwareSetCommonGlobalValue width 320;
+	mayaSoftwareSetCommonGlobalValue height 240;
+	setAttr "defaultRenderGlobals.imageFormat" 8;
+	renderIntoNewWindow render;
+	editRenderLayerGlobals -currentRenderLayer "defaultRenderLayer";
+	mentalrayUI "";
+	workspace -q -rte images;
+	file -q -exn;
+	mrProgress -e -bp -pd 0 -l "translating";
+	miPmCreate;
+	setAttr "miDefaultOptions.finalGather" 1;
+	setAttr "miDefaultOptions.globalIllum" 1;
+	miPmSetCancelMode 0;
+	miPmSetMessage "translating";
+	miPmSetPercent 0;
+	miPmSetVisible 1;
+	mrProgress -e -l "translating frame 1" -pd 0;
+	miPmSetMessage "translating frame 1";
+	mrProgress -e -ep;
+	miPmClose;
+	mrProgress -e -bp -pd 0 -l "mental ray";
+	miPmCreate;
+	miPmSetCancelMode 0;
+	miPmSetMessage "mental ray";
+	miPmSetPercent 0;
+	miPmSetVisible 1;
+	mrProgress -e -l "mental ray rendering image" -pd 100;
+	miPmSetMessage "mental ray rendering image";
+	miPmSetPercent 100;
+	mrProgress -e -ep;
+	miPmClose;
+	mrProgress -e -ep;
+	eval("renderWindowSaveImageCallback \"renderView\" " + $fullpath + " \"JPEG\"");
+}
+
+global proc materials(int $numParticles) {
+	int $i = 0;
+	eval("polyPlane -name grade -w 1 -h 1 -sx 10 -sy 10 -tx 1 -ch 1");
+	eval("rotate -r 90 0 0 grade");
+	eval("scale -r 55.230998 55.230998 55.230998 grade");
+	eval("setAttr grade.translateZ -1");
+	eval("shadingNode -asShader phong");
+	eval("sets -renderable true -noSurfaceShader true -empty -name phong1SG");
+	eval("connectAttr -f phong1.outColor phong1SG.surfaceShader");
+	eval("select -r grade");
+	eval("sets -e -forceElement phong1SG");
+	eval("shadingNode -asShader phong");
+	eval("sets -renderable true -noSurfaceShader true -empty -name phong2SG");
+	eval("connectAttr -f phong2.outColor phong2SG.surfaceShader");
+	eval("setAttr phong2.color -type double3 0 0 0");
+	while ($i < $numParticles) {
+		eval("shadingNode -asShader blinn -n blinn" + $i);
+		eval("sets -renderable true -noSurfaceShader true -empty -name blinn" + $i + "SG");
+		eval("connectAttr -f blinn" + $i + ".outColor blinn" + $i + "SG.surfaceShader");
+		eval("select particle" + $i);		
+		eval("sets -e -forceElement blinn" + $i + "SG");
+		eval("setAttr blinn" + $i + ".color -type double3 1 0 0");
+		$i++;
+	}
+}
+
