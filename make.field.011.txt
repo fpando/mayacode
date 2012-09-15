@@ -1,0 +1,43 @@
+file -f -new;
+float $buckyRadius = 100.001;
+float $buckySideLength = 40.36;
+float $buckyMultiple = 1.95;
+
+int $count = 0;
+int $balls = 10;
+int $siteX = $buckyRadius * $balls / 2 + $buckyRadius * 2;
+int $siteY = $buckyRadius * $balls / 2 + $buckyRadius * 2;
+string $bucky[];
+string $groundPlane[];
+int $moveBuckyDist[];
+
+while ($count < $balls) {
+	$bucky = makeBucky($buckyRadius,$buckyMultiple,$buckySideLength,$count);
+	$moveBuckyDist = moveBucky($siteX,$siteY,$bucky[0]);
+	$count++;
+}
+$groundPlane = makeGroundPlane($siteX,$siteY);
+
+
+
+
+
+proc string[] makeBucky(int $buckyRadius, int $buckyMultiple, float $buckySideLength, int $count) {
+	float $sizeBucky = rand($buckyMultiple);
+	string $buckyName[] = evalEcho("polyPrimitive -name bucky00" + $count + " -object 1 -r " + ($buckyRadius * $sizeBucky) + " -l " + ($buckySideLength * $sizeBucky));
+	return $buckyName;
+}
+
+proc int[] moveBucky(int $siteX, int $siteY, string $buckyName) {
+	int $moveBuckyDist[];
+	$moveBuckyDist[0] = rand($siteX);
+	$moveBuckyDist[1] = rand($siteY);
+	evalEcho("move -r $moveBuckyDist[0] $moveBuckyDist[1] 0 " + $buckyName);
+	return $moveBuckyDist;
+}
+
+proc string[] makeGroundPlane(int $siteX, int $siteY) {
+	string $groundPlane[] = evalEcho("polyCube -w " + $siteX + " -h " + $siteY + " -n groundplane");
+	evalEcho("move -r " + ($siteX/2) + " " + ($siteY/2) + " 0 groundplane");
+	return $groundPlane;
+}

@@ -1,0 +1,16 @@
+file -f -new;
+
+float $radius = 10;
+float $sideLength = 4.036;
+int $balls = 10;
+int $siteX = 200;
+int $siteY = 200;
+int $count = 0;
+int $moveBuckyX = 0;
+int $moveBuckyY = 0;
+
+while ($count < $balls) {
+	eval("polyPrimitive -name bucky00" + $count + " -object 1 -r 10 -l 4.036")
+	eval("move -r $moveBuckyX $moveBuckyY 0 bucky00" + $count);
+	$count++;
+}

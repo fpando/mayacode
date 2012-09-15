@@ -1,0 +1,21 @@
+file -f -new;
+float $buckyRadius = 10.001;
+float $buckySideLength = 4.036;
+float $buckyMultiple = 4.5;
+
+int $balls = 10;
+int $siteX = 200;
+int $siteY = 200;
+int $count = 0;
+int $moveBuckyX = 0;
+int $moveBuckyY = 0;
+float $sizeBucky = 0.001;
+
+while ($count < $balls) {
+	$moveBuckyX = rand($siteX);
+	$moveBuckyY = rand($siteY);
+	$sizeBucky= rand($buckyMultiple);	
+	evalEcho("polyPrimitive -name bucky00" + $count + " -object 1 -r " + ($buckyRadius * $sizeBucky) + " -l " + ($buckySideLength * $sizeBucky));
+	evalEcho("move -r $moveBuckyX $moveBuckyY 0 bucky00" + $count);
+	$count++;
+}

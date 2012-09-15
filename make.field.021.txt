@@ -1,0 +1,127 @@
+file -f -new;
+float $buckyRadius = 100.001;
+float $buckySideLength = 40.36;
+float $buckyMultiple = 1.95;
+float $buckyMutation = 8.75;
+int $buckyEdges = 90;
+int $buckyGlazeFace[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,16,18,20,21,23,26,30};
+int $buckySunFace[] = {14,15,17,19,22,24,25,27,28,29,31};
+int $count = 0;
+int $balls = 1;
+int $siteX = $buckyRadius * $balls / 2 + $buckyRadius * 2;
+int $siteY = $buckyRadius * $balls / 2 + $buckyRadius * 2;
+string $bucky[];
+string $groundPlane[];
+int $moveBuckyDist[];
+float $baselineArea[];
+float $mutation[];
+int $sunFacets = 0;
+int $clean = 0;
+
+while ($count < $balls) {
+	$bucky = makeBucky($buckyRadius,$buckyMultiple,$buckySideLength,$count);
+	$sunFacets = cloneBucky($buckyGlazeFace,$buckySunFace,$bucky[0]);
+	$baselineArea = getBuckyArea($bucky[0],$buckyGlazeFace,$buckySunFace);
+	$clean = cleanClones($bucky[0]);
+	$mutation = mutateBucky($buckyMutation,$bucky[0],$buckyEdges);
+	//$moveBuckyDist = moveBucky($siteX,$siteY,$bucky[0]);
+	//cloneBucky($bucky[0],$buckyGlazeFace,$buckySunFace);
+	//evaluateBucky($bucky[0],$baselineArea);
+	//cleanClones($bucky[0]);
+	$count++;
+}
+$groundPlane = makeGroundPlane($siteX,$siteY);
+viewSet -fit -ff 0.8 -krs true -an 1 -p;
+
+
+
+// subroutines //
+
+proc float[] mutateBucky(float $buckyMutation, string $buckyName, int $buckyEdges) {
+	int $count = 0;
+	float $mutation[]; 
+	while ($count < $buckyEdges) {
+		$mutation[0] = rand($buckyMutation);
+		$mutation[1] = rand($buckyMutation);
+		$mutation[2] = rand($buckyMutation);
+		eval("select -r " + $buckyName + ".e[" + $count + "]");
+		eval("move -r " + $mutation[0] + " 0 0 " + $buckyName + ".e[" + $count + "]");
+		eval("move -r " + $mutation[1] + " 0 0 " + $buckyName + ".e[" + $count + "]");
+		eval("move -r " + $mutation[2] + " 0 0 " + $buckyName + ".e[" + $count + "]");
+		$count++;
+	}
+	return $mutation;
+}
+
+proc int cloneBucky(int $buckyGlazeFace[], int $buckySunFace[], string $buckyName) {
+	int $cloneCountSun = 0;
+	int $cloneCountGlaze = 0;
+	string $tmp;
+	evalEcho("select -r " + $buckyName);
+	evalEcho("duplicate -rr -name " + $buckyName + "Sun");
+	evalEcho("select -r " + $buckyName);
+	evalEcho("duplicate -rr -name " + $buckyName + "Glaze");
+	$tmp = "delete ";
+	while ($cloneCountGlaze < size($buckyGlazeFace)) {
+		$tmp = $tmp + $buckyName + "Sun.f[" + $buckyGlazeFace[$cloneCountGlaze] + "] "; 	
+		$cloneCountGlaze++;
+	}
+	evalEcho($tmp);
+	$tmp = "delete ";
+	while ($cloneCountSun < size($buckySunFace)) {
+		$tmp = $tmp + $buckyName + "Glaze.f[" + $buckySunFace[$cloneCountSun] + "] "; 	
+		$cloneCountSun++;
+	}
+	evalEcho($tmp);
+	return $cloneCountSun;
+}
+
+proc string[] makeGroundPlane(int $siteX, int $siteY) {
+	string $groundPlane[] = evalEcho("polyCube -w " + $siteX + " -h " + $siteY + " -n groundplane");
+	evalEcho("move -r " + ($siteX/2) + " " + ($siteY/2) + " 0 groundplane");
+	return $groundPlane;
+}
+
+proc string[] makeBucky(int $buckyRadius, int $buckyMultiple, float $buckySideLength, int $count) {
+	float $sizeBucky = rand($buckyMultiple);
+	string $buckyName[] = evalEcho("polyPrimitive -name bucky00" + $count + " -object 1 -r " + ($buckyRadius * $sizeBucky) + " -l " + ($buckySideLength * $sizeBucky));
+	return $buckyName;
+}
+
+proc float[] getBuckyArea(string $buckyName, int $buckyGlazeFace[], int $buckySunFace[]) {
+	float $baselineArea[] = evalEcho("polyEvaluate -a " + $buckyName);
+	float $baselineAreaSun[] = evalEcho("polyEvaluate -a " + $buckyName + "Sun");
+	float $baselineAreaGlaze[] = evalEcho("polyEvaluate -a " + $buckyName + "Glaze");
+	$baselineArea[1] = $baselineAreaSun[0];
+	$baselineArea[2] = $baselineAreaGlaze[0];	
+	return $baselineArea;
+}	
+
+proc int cleanClones(string $buckyName) { 
+	int $clean = 0;
+	evalEcho("delete " + $buckyName + "Sun"); $clean++; 
+ 	evalEcho("delete " + $buckyName + "Glaze"); $clean++; 
+	return $clean;
+}
+
+/*
+
+proc int[] moveBucky(int $siteX, int $siteY, string $buckyName) {
+	int $moveBuckyDist[];
+	$moveBuckyDist[0] = rand($siteX);
+	$moveBuckyDist[1] = rand($siteY);
+	evalEcho("move -r $moveBuckyDist[0] $moveBuckyDist[1] 0 " + $buckyName);
+	return $moveBuckyDist;
+}
+
+proc int evaluateBucky(string $buckyName, float $baselineArea[]) {
+	int $success = 0;
+	float $buckyTotalArea[];
+	float $buckySunArea[]; 
+	float $buckyGlazeArea[];
+	string $bname = $buckyName;
+	$buckyTotalArea = evalEcho("polyEvaluate -a " + $bname);
+	$buckySunArea = evalEcho("polyEvaluate -a " + $bname + "Sun");
+	$buckyGlazeArea = evalEcho("polyEvaluate -a " + $bname + "Glaze");
+	return $success;
+}

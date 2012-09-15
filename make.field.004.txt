@@ -1,0 +1,24 @@
+file -f -new;
+float $buckyRadius = 100.001;
+float $buckySideLength = 40.36;
+float $buckyMultiple = 1.95;
+
+int $balls = 10;
+int $siteX = $buckyRadius * $balls + $buckyRadius;
+int $siteY = $buckyRadius * $balls + $buckyRadius;
+int $count = 0;
+int $moveBuckyX = 0;
+int $moveBuckyY = 0;
+float $sizeBucky = 0.001;
+
+while ($count < $balls) {
+	$moveBuckyX = rand($siteX);
+	$moveBuckyY = rand($siteY);
+	$sizeBucky= rand($buckyMultiple);	
+	evalEcho("polyPrimitive -name bucky00" + $count + " -object 1 -r " + ($buckyRadius * $sizeBucky) + " -l " + ($buckySideLength * $sizeBucky));
+	evalEcho("move -r $moveBuckyX $moveBuckyY 0 bucky00" + $count);
+	$count++;
+}
+
+polyCube -w ($siteX) -h ($siteY) -n groundplane;
+move -r ($siteX / 2) ($siteY / 2) 0 groundplane;
